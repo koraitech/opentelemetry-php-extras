@@ -16,6 +16,13 @@ final class RedisTest extends TestCase
         Redis::register($this->hook(), $this->instrumentation, new Config($env));
     }
 
+    private function requirePhpredisHooks(): void
+    {
+        if (!isset($this->hooks['redis::get'])) {
+            $this->markTestSkipped('phpredis is hooked only with ext-redis on PHP 8.2 or later');
+        }
+    }
+
     public function test_hooks_phpredis_methods_and_predis(): void
     {
         $this->register();
@@ -33,6 +40,7 @@ final class RedisTest extends TestCase
     public function test_client_span_per_command_without_key_by_default(): void
     {
         $this->register();
+        $this->requirePhpredisHooks();
         $this->startRoot();
         $this->invoke('Redis', 'get', null, ['session:abc'], fn () => 'v');
         $this->invoke('Redis', 'pconnect', null, ['10.1.0.6', 6379], fn () => true);
@@ -52,6 +60,7 @@ final class RedisTest extends TestCase
     public function test_keys_when_enabled_and_raw_command(): void
     {
         $this->register(['KORAI_OTEL_REDIS_KEYS' => 'true']);
+        $this->requirePhpredisHooks();
         $this->startRoot();
         $this->invoke('Redis', 'mget', null, [['a', 'b']], fn () => []);
         $this->invoke('Redis', 'rawCommand', null, ['client', 'list'], fn () => '');
@@ -86,6 +95,7 @@ final class RedisTest extends TestCase
     public function test_no_span_outside_a_trace(): void
     {
         $this->register();
+        $this->requirePhpredisHooks();
         $this->invoke('Redis', 'get', null, ['k'], fn () => null);
         $this->assertSame([], $this->names());
     }
@@ -93,6 +103,7 @@ final class RedisTest extends TestCase
     public function test_failed_command_is_an_error(): void
     {
         $this->register();
+        $this->requirePhpredisHooks();
         $this->startRoot();
         try {
             $this->invoke('Redis', 'get', null, ['k'], fn () => throw new \RuntimeException('READONLY'));
