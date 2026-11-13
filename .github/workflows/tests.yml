@@ -1,0 +1,56 @@
+# Unit and integration tests (real opentelemetry extension, real Redis) for a matrix of PHP and Laravel versions.
+# Called by CI with .github/versions.json, and by the daily version check with newly released versions.
+name: Tests
+
+on:
+  workflow_call:
+    inputs:
+      matrix:
+        description: 'JSON {"include": [{"php": "8.4", "laravel": "^13.0"}, ...]}'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.matrix) }}
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 2s --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: opentelemetry, redis
+          coverage: none
+          tools: composer:v2
+      - name: Validate composer.json
+        run: composer validate --strict --no-check-lock
+      - name: Install (Laravel ${{ matrix.laravel }})
+        env:
+          LARAVEL: ${{ matrix.laravel }}
+        run: |
+          composer require --dev --no-update "illuminate/events:${LARAVEL}"
+          composer update --no-interaction --no-progress --prefer-dist
+      - name: Unit tests
+        run: composer test:unit
+      - name: Integration tests (real extension hooks, real Redis)
+        env:
+          REDIS_HOST: 127.0.0.1
+        run: |
+          php -r 'exit(extension_loaded("opentelemetry") ? 0 : 1);' || { echo "::error::opentelemetry extension not loaded"; exit 1; }
+          php -r 'exit(extension_loaded("redis") ? 0 : 1);' || { echo "::error::redis extension not loaded"; exit 1; }
+          composer test:integration -- --fail-on-skipped

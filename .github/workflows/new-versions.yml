@@ -1,0 +1,94 @@
+# Daily: looks for PHP and Laravel versions released after the ones in .github/versions.json.
+# When it finds one it runs the whole test suite on it. If the tests pass it adds the version to the
+# tested versions (versions.json, composer.json, README) on main and publishes a release ("feat:", so a minor).
+# If they fail it opens an issue (once) and tries again the next day.
+name: New PHP and Laravel versions
+
+on:
+  schedule:
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: new-versions
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      found: ${{ steps.detect.outputs.found }}
+      include: ${{ steps.detect.outputs.include }}
+      title: ${{ steps.detect.outputs.title }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: detect
+        run: .github/scripts/new_versions.py detect
+
+  test:
+    needs: detect
+    if: needs.detect.outputs.found == 'true'
+    uses: ./.github/workflows/tests.yml
+    with:
+      matrix: ${{ needs.detect.outputs.include }}
+
+  publish:
+    needs: [detect, test]
+    if: needs.detect.outputs.found == 'true' && needs.test.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Add the versions and push to main
+        env:
+          NEW_ENTRIES: ${{ needs.detect.outputs.include }}
+          TITLE: ${{ needs.detect.outputs.title }}
+        run: |
+          set -euo pipefail
+          .github/scripts/new_versions.py apply
+          git config user.name igayoso
+          git config user.email 1875941+igayoso@users.noreply.github.com
+          git commit -am "feat: ${TITLE}"
+          git push origin HEAD:main
+      # A push made with the workflow token does not start other workflows, so start them here.
+      - name: Run CI and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run ci.yml --ref main
+          gh workflow run release.yml --ref main
+
+  report:
+    needs: [detect, test]
+    if: needs.detect.outputs.found == 'true' && needs.test.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue (once)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: ${{ needs.detect.outputs.title }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Tests fail on new version: ${TITLE#support }"
+          if [ -n "$(gh issue list --state open --search "in:title \"${title}\"" --json number --jq '.[0].number')" ]; then
+            echo "Issue already open."; exit 0
+          fi
+          gh issue create --title "$title" --body "The daily version check found a new version and the tests failed on it: ${RUN}
+
+          It retries every day; once the tests pass, the version is added and released automatically and this issue can be closed."
