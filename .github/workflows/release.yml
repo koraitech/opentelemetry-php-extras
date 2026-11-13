@@ -51,8 +51,9 @@ jobs:
           set -euo pipefail
           gh release create "v${VERSION}" --target "$SHA" --title "v${VERSION}" --notes-file release-notes.md
 
+      # Also on a manual run, so a first run after adding the secrets registers the package.
       - name: Publish on Packagist
-        if: steps.version.outputs.version != ''
+        if: steps.version.outputs.version != '' || github.event_name == 'workflow_dispatch'
         env:
           PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
           PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
