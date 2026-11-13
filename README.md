@@ -14,7 +14,6 @@ Nothing changes in your code: the package registers itself through Composer's au
 
 - PHP 8.1 or later. Tracing the phpredis extension needs PHP 8.2 or later: older versions cannot hook methods of PHP extensions. Predis and Laravel events work on 8.1.
   <!-- tested -->Tested on PHP 8.1, 8.2, 8.3 and 8.4, and Laravel 9 to 13.<!-- /tested -->
-  <!-- tested -->Tested on PHP 8.1, 8.2, 8.3, 8.4 and 8.5, and Laravel 9 to 14.<!-- /tested -->
 - One of:
   - the [`opentelemetry` PECL extension](https://github.com/open-telemetry/opentelemetry-php-instrumentation) with the OpenTelemetry SDK, or
   - the [OpenTelemetry PHP distro](https://github.com/open-telemetry/opentelemetry-php-distro) (`opentelemetry-php-distro`).
@@ -106,10 +105,6 @@ Releases are automatic. When CI passes on `main`, the next version is worked out
 last release ([Conventional Commits](https://www.conventionalcommits.org/): `feat:` adds a minor version, `fix:` and
 others a patch, `!` or `BREAKING CHANGE` a major), tagged, published as a GitHub release and sent to Packagist.
 Changes that only touch tests, CI or docs don't produce a release.
-
-A daily job also checks php.net and Packagist for new PHP and Laravel versions. When one appears, it runs the full
-test suite on it and, if it passes, adds it to the tested versions and publishes a new minor release. If the tests
-fail, it opens an issue instead.
 
 A daily job also checks php.net and Packagist for new PHP and Laravel versions. When one appears, it runs the full
 test suite on it and, if it passes, adds it to the tested versions and publishes a new minor release. If the tests
