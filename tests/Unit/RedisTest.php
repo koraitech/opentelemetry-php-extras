@@ -20,8 +20,10 @@ final class RedisTest extends TestCase
     {
         $this->register();
         $this->assertArrayHasKey('predis\\client::executecommand', $this->hooks);
-        if (!class_exists(\Redis::class)) {
-            $this->markTestSkipped('ext-redis not loaded');
+        if (!class_exists(\Redis::class) || PHP_VERSION_ID < 80200) {
+            $this->assertArrayNotHasKey('redis::get', $this->hooks);
+
+            return;
         }
         $this->assertArrayHasKey('redis::get', $this->hooks);
         $this->assertArrayHasKey('redis::hgetall', $this->hooks);

@@ -10,7 +10,7 @@ use OpenTelemetry\API\Trace\SpanKind;
 use Throwable;
 
 /**
- * Client spans for Redis commands, from the PHP Redis extension (phpredis) and from Predis.
+ * Client spans for Redis commands, from the PHP Redis extension (phpredis, PHP 8.2 or later) and from Predis.
  *
  * The extension is hooked directly, so commands are traced whoever issues them: Laravel's cache,
  * queue and session drivers, other libraries, or the application itself. There is no need to call
@@ -78,7 +78,8 @@ final class Redis
             $stack->pop($exception);
         };
 
-        foreach (['Redis', 'RedisCluster'] as $redisClass) {
+        // Methods of PHP extensions can only be hooked from PHP 8.2 (observer API for internal functions).
+        foreach (PHP_VERSION_ID >= 80200 ? ['Redis', 'RedisCluster'] : [] as $redisClass) {
             if (!class_exists($redisClass, false)) {
                 continue;
             }

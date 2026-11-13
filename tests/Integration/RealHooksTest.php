@@ -89,6 +89,7 @@ final class RealHooksTest extends TestCase
             $redis->del('korai:test');
         });
 
-        $this->assertSame(['REDIS CONNECT', 'REDIS SET', 'REDIS GET', 'REDIS DEL'], $names);
+        // PHP 8.1 cannot hook methods of extensions, so phpredis is not traced there.
+        $this->assertSame(PHP_VERSION_ID >= 80200 ? ['REDIS CONNECT', 'REDIS SET', 'REDIS GET', 'REDIS DEL'] : [], $names);
     }
 }

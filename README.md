@@ -6,13 +6,13 @@ the official PHP instrumentation leaves blank:
 | What | Spans | Works with |
 |---|---|---|
 | **Laravel events** | One span per event dispatched through `Illuminate\Events\Dispatcher`, named after the event: `Illuminate\Cache\Events\CacheHit`, `eloquent.booting: App\Models\Page`, `Illuminate\Routing\Events\RouteMatched`, your own events… Listeners run inside the span, so slow listeners and the queries they run are visible. | Laravel 9 to 13 |
-| **Redis commands** | One client span per command (`REDIS GET`, `REDIS HGETALL`, `REDIS PCONNECT`…), with server address, port and database. | phpredis (`ext-redis`, `Redis` and `RedisCluster`) and Predis, in any PHP application |
+| **Redis commands** | One client span per command (`REDIS GET`, `REDIS HGETALL`, `REDIS PCONNECT`…), with server address, port and database. | phpredis (`ext-redis`, `Redis` and `RedisCluster`, PHP 8.2 or later) and Predis, in any PHP application |
 
 Nothing changes in your code: the package registers itself through Composer's autoloader.
 
 ## Requirements
 
-- PHP 8.1 or later.
+- PHP 8.1 or later. Tracing the phpredis extension needs PHP 8.2 or later: older versions cannot hook methods of PHP extensions. Predis and Laravel events work on 8.1.
 - One of:
   - the [`opentelemetry` PECL extension](https://github.com/open-telemetry/opentelemetry-php-instrumentation) with the OpenTelemetry SDK, or
   - the [OpenTelemetry PHP distro](https://github.com/open-telemetry/opentelemetry-php-distro) (`opentelemetry-php-distro`).
