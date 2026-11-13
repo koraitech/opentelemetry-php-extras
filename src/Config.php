@@ -26,9 +26,11 @@ final class Config
         foreach ([
             'OTEL_SDK_DISABLED',
             'OTEL_PHP_DISABLED_INSTRUMENTATIONS',
+            'KORAI_OTEL_LARAVEL_EVENTS',
             'KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE',
             'KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT',
             'KORAI_OTEL_REDIS_KEYS',
+            'KORAI_OTEL_REDIS_MIN_DURATION',
         ] as $name) {
             $value = getenv($name);
             if ($value === false && isset($_SERVER[$name]) && is_string($_SERVER[$name])) {
@@ -76,9 +78,35 @@ final class Config
      * Only create event spans inside an existing trace (default). Events fired while the
      * framework boots, before any request span exists, would otherwise each start a new trace.
      */
+    /**
+     * Which events get a span: `listeners` (default) only events that have a listener of the application's own,
+     * so the span shows where listener time goes; `all` every dispatched event, as Datadog does (many more spans:
+     * every cache read, every model retrieved...).
+     */
+    public function eventsMode(): string
+    {
+        $mode = strtolower(trim((string) ($this->env['KORAI_OTEL_LARAVEL_EVENTS'] ?? '')));
+
+        return $mode === 'all' ? 'all' : 'listeners';
+    }
+
     public function eventsRequireParent(): bool
     {
         return self::bool($this->env['KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT'] ?? null, true);
+    }
+
+    /**
+     * Redis commands faster than this get no span (failed commands always do), in nanoseconds.
+     * Set as milliseconds: `2`, `2ms`, `0.5ms`. Default 0: every command.
+     */
+    public function redisMinDurationNs(): int
+    {
+        $value = strtolower(trim((string) ($this->env['KORAI_OTEL_REDIS_MIN_DURATION'] ?? '')));
+        if (str_ends_with($value, 'ms')) {
+            $value = substr($value, 0, -2);
+        }
+
+        return is_numeric($value) && (float) $value > 0 ? (int) round((float) $value * 1_000_000) : 0;
     }
 
     /** Record the Redis key (first argument) in `db.query.text`. Values are never recorded. */

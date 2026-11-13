@@ -88,6 +88,17 @@ abstract class TestCase extends Base
         $this->root = null;
     }
 
+    protected function rootSpanId(): string
+    {
+        foreach ($this->exported->getArrayCopy() as $s) {
+            if ($s->getName() === 'GET /') {
+                return $s->getSpanId();
+            }
+        }
+
+        return '';
+    }
+
     /** @return list<ImmutableSpan> */
     protected function spans(): array
     {

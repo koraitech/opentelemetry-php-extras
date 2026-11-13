@@ -62,10 +62,13 @@ final class RealHooksTest extends TestCase
     {
         $events = new Dispatcher();
         $events->listen('cache.hit', static fn () => null);
+        $events->listen(\ArrayObject::class, static fn () => null);
+        $events->listen('eloquent.*', static fn () => null);
         $names = $this->inRequest(static function () use ($events): void {
             $events->dispatch('cache.hit');
             $events->dispatch(new \ArrayObject());
             $events->until('eloquent.booting: App\\Models\\Page');
+            $events->dispatch('no.listeners'); // default mode: no span
         });
 
         $this->assertSame(['cache.hit', 'ArrayObject', 'eloquent.booting: App\\Models\\Page'], $names);

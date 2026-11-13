@@ -5,7 +5,7 @@ the official PHP instrumentation leaves blank:
 
 | What | Spans | Works with |
 |---|---|---|
-| **Laravel events** | One span per event dispatched through `Illuminate\Events\Dispatcher`, named after the event: `Illuminate\Cache\Events\CacheHit`, `eloquent.booting: App\Models\Page`, `Illuminate\Routing\Events\RouteMatched`, your own events… Listeners run inside the span, so slow listeners and the queries they run are visible. | Laravel 9 to 13 |
+| **Laravel events** | One span per event dispatched through `Illuminate\Events\Dispatcher` that has listeners, named after the event: `App\Events\OrderPlaced`, `eloquent.saving: App\Models\Page`, `Illuminate\Auth\Events\Login`… Listeners run inside the span, so slow listeners and the queries they run are visible. Every event, as Datadog does, with `KORAI_OTEL_LARAVEL_EVENTS=all`. | Laravel 9 to 13 |
 | **Redis commands** | One client span per command (`REDIS GET`, `REDIS HGETALL`, `REDIS PCONNECT`…), with server address, port and database. | phpredis (`ext-redis`, `Redis` and `RedisCluster`, PHP 8.2 or later) and Predis, in any PHP application |
 
 Nothing changes in your code: the package registers itself through Composer's autoloader.
@@ -49,8 +49,10 @@ All settings are environment variables and all are optional.
 | Variable | Default | What it does |
 |---|---|---|
 | `OTEL_PHP_DISABLED_INSTRUMENTATIONS` | | Standard OpenTelemetry list. Add `korai-laravel-events` or `korai-redis` to turn a part off. |
+| `KORAI_OTEL_LARAVEL_EVENTS` | `listeners` | Which events get a span. `listeners`: events with at least one listener of the application (listeners that OpenTelemetry registers itself do not count; cache hits and queries are already in the trace). `all`: every event, including each cache read and each model retrieved. A busy page can then send ten times more spans. |
 | `KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE` | | Comma-separated event names to skip. `*` matches anything: `Illuminate\Log\Events\MessageLogged,eloquent.*` |
 | `KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT` | `true` | Only create event spans inside an existing trace. Events fired while the framework boots would otherwise each start a trace of their own. |
+| `KORAI_OTEL_REDIS_MIN_DURATION` | `0` | Milliseconds (`2`, `0.5ms`). Redis commands faster than this get no span; failed commands always do. Use it when a page sends hundreds of fast reads. |
 | `KORAI_OTEL_REDIS_KEYS` | `false` | Record the command and key in `db.query.text` (`GET session:abc`). Values are never recorded. |
 
 ## Recommended settings for Laravel
@@ -76,8 +78,10 @@ instrumentation also active, each command would be traced twice.
 
 ### Span volume
 
-One span per Laravel event is detailed: a typical page can dispatch hundreds of events (every cache hit, every model
-booting and booted). Use `KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE` for events you don't need, and keep your sampler in mind.
+A typical Laravel page dispatches hundreds of events (every cache read, every model retrieved). The default only
+traces the ones your code listens to. With `KORAI_OTEL_LARAVEL_EVENTS=all`, use `KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE` for
+events you don't need. Redis spans follow the commands your code sends: a page that reads 500 keys sends 500 spans.
+Keep your sampler in mind.
 
 ## Span reference
 

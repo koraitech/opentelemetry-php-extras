@@ -37,7 +37,8 @@
     "autoload-dev": {
         "psr-4": {
             "Korai\\OpenTelemetry\\Tests\\": "tests/"
-        }
+        },
+        "classmap": ["tests/Support/FakeTelemetryWatcher.php"]
     },
     "scripts": {
         "test:unit": [

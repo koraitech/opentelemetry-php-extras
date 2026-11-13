@@ -112,4 +112,46 @@ final class RedisTest extends TestCase
         $this->endRoot();
         $this->assertSame('Error', $this->spans()[0]->getStatus()->getCode());
     }
+
+    public function test_min_duration_keeps_slow_and_failed_commands_only(): void
+    {
+        $this->register(['KORAI_OTEL_REDIS_MIN_DURATION' => '5ms']);
+        $this->startRoot();
+        $this->invoke('Predis\\Client', 'executeCommand', null, [$this->command('GET')], fn () => 'fast');
+        $this->invoke('Predis\\Client', 'executeCommand', null, [$this->command('BLPOP')], function () {
+            usleep(20000);
+
+            return null;
+        });
+        try {
+            $this->invoke('Predis\\Client', 'executeCommand', null, [$this->command('SET')], fn () => throw new \RuntimeException('READONLY'));
+        } catch (\RuntimeException) {
+        }
+        $this->endRoot();
+
+        $this->assertSame(['REDIS BLPOP', 'REDIS SET'], $this->names());
+        $blpop = $this->spans()[0];
+        $this->assertGreaterThanOrEqual(15_000_000, $blpop->getEndEpochNanos() - $blpop->getStartEpochNanos());
+        $this->assertSame($this->rootSpanId(), $blpop->getParentSpanId());
+        $this->assertSame('Error', $this->spans()[1]->getStatus()->getCode());
+    }
+
+    private function command(string $id): object
+    {
+        return new class ($id) {
+            public function __construct(private string $id)
+            {
+            }
+
+            public function getId(): string
+            {
+                return $this->id;
+            }
+
+            public function getArguments(): array
+            {
+                return ['k'];
+            }
+        };
+    }
 }

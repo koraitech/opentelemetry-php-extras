@@ -7,6 +7,7 @@ namespace Korai\OpenTelemetry;
 use Closure;
 use OpenTelemetry\API\Instrumentation\CachedInstrumentation;
 use OpenTelemetry\API\Trace\SpanKind;
+use OpenTelemetry\API\Trace\StatusCode;
 use Throwable;
 
 /**
@@ -48,10 +49,13 @@ final class Redis
     {
         $stack = new SpanStack();
         $keys = $config->redisKeys();
+        $minNs = $config->redisMinDurationNs();
+        /** @var list<array{\OpenTelemetry\API\Trace\SpanBuilderInterface, int}|null> $pending */
+        $pending = [];
 
-        $pre = static function ($client, array $params, ?string $class, ?string $function, ?string $filename, ?int $lineno) use ($stack, $instrumentation, $keys): void {
+        $pre = static function ($client, array $params, ?string $class, ?string $function, ?string $filename, ?int $lineno) use ($stack, $instrumentation, $keys, $minNs, &$pending): void {
             if (!SpanStack::hasActiveParent()) {
-                $stack->skip();
+                $minNs > 0 ? $pending[] = null : $stack->skip();
 
                 return;
             }
@@ -72,10 +76,35 @@ final class Redis
             if ($keys && ($key = self::key($params)) !== null) {
                 $builder->setAttribute('db.query.text', $operation . ' ' . $key);
             }
+            if ($minNs > 0) {
+                // The span is only created when the command turns out slow enough (or fails), backdated to its start.
+                $pending[] = [$builder, self::now()];
+
+                return;
+            }
             $stack->push($builder->startSpan());
         };
-        $post = static function ($client, array $params, $return, ?Throwable $exception) use ($stack): void {
-            $stack->pop($exception);
+        $post = static function ($client, array $params, $return, ?Throwable $exception) use ($stack, $minNs, &$pending): void {
+            if ($minNs <= 0) {
+                $stack->pop($exception);
+
+                return;
+            }
+            $entry = array_pop($pending);
+            if ($entry === null) {
+                return;
+            }
+            [$builder, $start] = $entry;
+            $end = self::now();
+            if ($exception === null && $end - $start < $minNs) {
+                return;
+            }
+            $span = $builder->setStartTimestamp($start)->startSpan();
+            if ($exception !== null) {
+                $span->recordException($exception);
+                $span->setStatus(StatusCode::STATUS_ERROR, $exception->getMessage());
+            }
+            $span->end($end);
         };
 
         // Methods of PHP extensions can only be hooked from PHP 8.2 (observer API for internal functions).
@@ -102,6 +131,12 @@ final class Redis
             $pre($client, $args, $class, (string) $command->getId(), $filename, $lineno);
         };
         $hook('Predis\\Client', 'executeCommand', $predisPre, $post);
+    }
+
+    /** Wall-clock time in nanoseconds since the epoch, as span timestamps are. */
+    private static function now(): int
+    {
+        return (int) (microtime(true) * 1_000_000_000);
     }
 
     /**

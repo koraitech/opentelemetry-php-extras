@@ -18,6 +18,13 @@ final class CacheHitLike
     }
 }
 
+final class TelemetryWatcherLike
+{
+    public function record(): void
+    {
+    }
+}
+
 final class LaravelEventsTest extends TestCase
 {
     private Dispatcher $events;
@@ -28,7 +35,7 @@ final class LaravelEventsTest extends TestCase
         $this->events = new Dispatcher();
     }
 
-    private function register(array $env = []): void
+    private function register(array $env = ['KORAI_OTEL_LARAVEL_EVENTS' => 'all']): void
     {
         LaravelEvents::register($this->hook(), $this->instrumentation, new Config($env));
     }
@@ -77,14 +84,14 @@ final class LaravelEventsTest extends TestCase
 
     public function test_spans_outside_a_trace_when_parent_not_required(): void
     {
-        $this->register(['KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT' => 'false']);
+        $this->register(['KORAI_OTEL_LARAVEL_EVENTS' => 'all', 'KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT' => 'false']);
         $this->dispatch('booting');
         $this->assertSame(['booting'], $this->names());
     }
 
     public function test_excluded_events_create_no_span_and_keep_nesting_right(): void
     {
-        $this->register(['KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE' => 'eloquent.*, Illuminate\\Log\\Events\\MessageLogged']);
+        $this->register(['KORAI_OTEL_LARAVEL_EVENTS' => 'all', 'KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE' => 'eloquent.*, Illuminate\\Log\\Events\\MessageLogged']);
         $this->events->listen('eloquent.booted: X', function () {
             $this->dispatch('kept.inside.excluded');
         });
@@ -129,5 +136,46 @@ final class LaravelEventsTest extends TestCase
         $this->assertTrue(LaravelEvents::excluded('eloquent.booted: Foo', $re));
         $this->assertTrue(LaravelEvents::excluded('A\\B', $re));
         $this->assertFalse(LaravelEvents::excluded('A\\BC', $re));
+    }
+
+    public function test_by_default_only_events_with_listeners_of_the_application(): void
+    {
+        $this->register([]);
+        $this->events->listen('app.event', fn () => null);
+        $this->events->listen('watched.only', [new \OpenTelemetry\Tests\Fake\Watcher(), 'record']);
+        $this->startRoot();
+        $this->dispatch('app.event');
+        $this->dispatch('no.listeners');
+        $this->dispatch('watched.only');
+        $this->endRoot();
+
+        $this->assertSame(['app.event'], $this->names());
+    }
+
+    public function test_wildcard_and_interface_listeners_count(): void
+    {
+        $this->register([]);
+        $this->events->listen('orders.*', fn () => null);
+        $this->events->listen(\JsonSerializable::class, fn () => null);
+        $event = new class implements \JsonSerializable {
+            public function jsonSerialize(): mixed
+            {
+                return [];
+            }
+        };
+        $this->startRoot();
+        $this->dispatch('orders.created');
+        $this->dispatch($event);
+        $this->endRoot();
+
+        $this->assertCount(2, $this->names());
+    }
+
+    public function test_telemetry_listeners_are_recognised(): void
+    {
+        $this->assertTrue(LaravelEvents::isTelemetryListener([new \OpenTelemetry\Tests\Fake\Watcher(), 'record']));
+        $this->assertTrue(LaravelEvents::isTelemetryListener('OTelDistroScoped\\OpenTelemetry\\Contrib\\Instrumentation\\Laravel\\Watchers\\CacheWatcher@recordCacheHit'));
+        $this->assertFalse(LaravelEvents::isTelemetryListener([new TelemetryWatcherLike(), 'record']));
+        $this->assertFalse(LaravelEvents::isTelemetryListener(fn () => null));
     }
 }

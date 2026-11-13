@@ -10,11 +10,15 @@ use OpenTelemetry\API\Trace\SpanKind;
 use Throwable;
 
 /**
- * One span per Laravel event: every call to Illuminate\Events\Dispatcher::dispatch(), named after
+ * One span per Laravel event dispatched through Illuminate\Events\Dispatcher::dispatch(), named after
  * the event (its class, or the string name such as `eloquent.booting: App\Models\Page`).
  *
  * The span lasts as long as the listeners run, so slow listeners show up in the trace, and spans
  * created by listeners (queries, HTTP calls...) are nested under the event that triggered them.
+ *
+ * By default only events with a listener of the application's own get a span: listeners that OpenTelemetry
+ * itself registers (the Laravel instrumentation's cache and query watchers) do not count, since those events
+ * already appear as span events or query spans. KORAI_OTEL_LARAVEL_EVENTS=all traces every event.
  */
 final class LaravelEvents
 {
@@ -26,10 +30,12 @@ final class LaravelEvents
         $stack = new SpanStack();
         $exclude = self::patterns($config->excludedEvents());
         $requireParent = $config->eventsRequireParent();
+        $all = $config->eventsMode() === 'all';
 
-        $pre = static function ($dispatcher, array $params, ?string $class, ?string $function, ?string $filename, ?int $lineno) use ($stack, $instrumentation, $exclude, $requireParent): void {
+        $pre = static function ($dispatcher, array $params, ?string $class, ?string $function, ?string $filename, ?int $lineno) use ($stack, $instrumentation, $exclude, $requireParent, $all): void {
             $name = self::eventName($params[0] ?? null);
-            if ($name === null || ($requireParent && !SpanStack::hasActiveParent()) || self::excluded($name, $exclude)) {
+            if ($name === null || ($requireParent && !SpanStack::hasActiveParent()) || self::excluded($name, $exclude)
+                || (!$all && !self::hasOwnListeners($dispatcher, $name))) {
                 $stack->skip();
 
                 return;
@@ -50,6 +56,60 @@ final class LaravelEvents
 
         // dispatch() is the Laravel >= 5.8 entry point; until() calls it with $halt = true.
         $hook(self::DISPATCHER, 'dispatch', $pre, $post);
+    }
+
+    /**
+     * Whether the event has a listener that is not OpenTelemetry's own. Wildcard listeners count as the
+     * application's. Without a dispatcher to look at, the event is traced.
+     */
+    public static function hasOwnListeners(mixed $dispatcher, string $name): bool
+    {
+        if (!is_object($dispatcher) || !method_exists($dispatcher, 'getRawListeners')) {
+            return true;
+        }
+        try {
+            if (method_exists($dispatcher, 'hasWildcardListeners') && $dispatcher->hasWildcardListeners($name)) {
+                return true;
+            }
+            $raw = $dispatcher->getRawListeners();
+            $names = [$name];
+            if (class_exists($name, false)) {
+                $names = array_merge($names, array_values(class_implements($name) ?: []));
+            }
+            foreach ($names as $n) {
+                foreach ($raw[$n] ?? [] as $listener) {
+                    if (!self::isTelemetryListener($listener)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /** A listener registered by OpenTelemetry itself (the unscoped packages, or the distro's scoped copy). */
+    public static function isTelemetryListener(mixed $listener): bool
+    {
+        $class = null;
+        if (is_array($listener) && isset($listener[0])) {
+            $class = is_object($listener[0]) ? $listener[0]::class : (is_string($listener[0]) ? $listener[0] : null);
+        } elseif (is_string($listener)) {
+            $class = explode('@', $listener, 2)[0];
+        } elseif ($listener instanceof Closure) {
+            $reflection = new \ReflectionFunction($listener);
+            $class = $reflection->getClosureScopeClass()?->getName();
+        } elseif (is_object($listener)) {
+            $class = $listener::class;
+        }
+        if ($class === null) {
+            return false;
+        }
+
+        return str_starts_with($class, 'OpenTelemetry\\')
+            || preg_match('/^[A-Za-z0-9_]*Scoped[A-Za-z0-9_]*\\\\OpenTelemetry\\\\/', $class) === 1;
     }
 
     public static function eventName(mixed $event): ?string
