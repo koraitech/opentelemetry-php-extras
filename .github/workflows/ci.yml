@@ -55,13 +55,13 @@ jobs:
           composer require --dev --no-update "illuminate/events:${LARAVEL}"
           composer update --no-interaction --no-progress --prefer-dist
       - name: Unit tests
-        run: vendor/bin/phpunit --testsuite unit
+        run: composer test:unit
       - name: Integration tests (real extension hooks, real Redis)
         env:
           REDIS_HOST: 127.0.0.1
         run: |
           php -r 'exit(extension_loaded("opentelemetry") ? 0 : 1);' || { echo "::error::opentelemetry extension not loaded"; exit 1; }
-          vendor/bin/phpunit --testsuite integration --fail-on-skipped
+          composer test:integration -- --fail-on-skipped
 
   lowest:
     name: Lowest dependencies (PHP 8.1)
@@ -78,4 +78,4 @@ jobs:
           coverage: none
           tools: composer:v2
       - run: composer update --no-interaction --no-progress --prefer-lowest --prefer-stable
-      - run: vendor/bin/phpunit --testsuite unit
+      - run: composer test:unit

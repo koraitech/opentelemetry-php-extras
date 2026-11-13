@@ -17,6 +17,7 @@
     "require-dev": {
         "illuminate/events": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0",
         "open-telemetry/sdk": "^1.0",
+        "open-telemetry/sem-conv": "^1.27",
         "phpunit/phpunit": "^10.5 || ^11.0",
         "predis/predis": "^2.0 || ^3.0"
     },
@@ -37,6 +38,22 @@
         "psr-4": {
             "Korai\\OpenTelemetry\\Tests\\": "tests/"
         }
+    },
+    "scripts": {
+        "test:unit": [
+            "Composer\\Config::disableProcessTimeout",
+            "@putenv OTEL_PHP_DISABLED_INSTRUMENTATIONS=korai-laravel-events,korai-redis",
+            "phpunit --testsuite unit"
+        ],
+        "test:integration": [
+            "Composer\\Config::disableProcessTimeout",
+            "phpunit --testsuite integration"
+        ],
+        "test": ["@test:unit", "@test:integration"]
+    },
+    "scripts-descriptions": {
+        "test:unit": "Unit tests (the automatic registration is switched off so tests drive the hooks themselves)",
+        "test:integration": "Tests with the real opentelemetry extension hooks and a Redis server on REDIS_HOST"
     },
     "config": {
         "sort-packages": true,

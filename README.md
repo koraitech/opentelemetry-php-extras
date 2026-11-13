@@ -93,9 +93,9 @@ Spans are created only inside an active trace, and failures record the exception
 
 ```bash
 composer install
-vendor/bin/phpunit --testsuite unit
+composer test:unit
 # with the opentelemetry and redis extensions loaded and a Redis server on REDIS_HOST:
-vendor/bin/phpunit --testsuite integration
+composer test:integration
 ```
 
 ## Releases
