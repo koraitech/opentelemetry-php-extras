@@ -1,0 +1,72 @@
+# Releases are automatic. After CI passes on main, this workflow:
+#   1. works out the next version from the commits since the last tag
+#      (Conventional Commits: "feat:" -> minor, "fix:"/other -> patch,
+#       "!" or "BREAKING CHANGE" -> major; while on 0.x a breaking change bumps the minor),
+#   2. tags it and publishes a GitHub release with the commit list,
+#   3. tells Packagist, which publishes the version on packagist.org.
+# Commits that only touch tests, CI or docs do not produce a release.
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Next version
+        id: version
+        run: .github/scripts/next-version.sh >> "$GITHUB_OUTPUT"
+
+      - name: Tag and GitHub release
+        if: steps.version.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" --target "$SHA" --title "v${VERSION}" --notes-file release-notes.md
+
+      - name: Publish on Packagist
+        if: steps.version.outputs.version != ''
+        env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PACKAGIST_USERNAME}" ] || [ -z "${PACKAGIST_API_TOKEN}" ]; then
+            echo "::warning::PACKAGIST_USERNAME / PACKAGIST_API_TOKEN not set: Packagist was not notified."
+            exit 0
+          fi
+          body=$(jq -nc --arg url "$REPO_URL" '{repository: {url: $url}}')
+          # First run registers the package (an "already exists" answer is fine), then every run refreshes it.
+          curl -sS -X POST -H 'Content-Type: application/json' -d "$body" \
+            "https://packagist.org/api/create-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_API_TOKEN}" || true
+          echo
+          curl -sSf -X POST -H 'Content-Type: application/json' -d "$body" \
+            "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_API_TOKEN}"

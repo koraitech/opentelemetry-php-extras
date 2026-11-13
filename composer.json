@@ -1,0 +1,50 @@
+{
+    "name": "koraitech/opentelemetry-php-extras",
+    "description": "Extra OpenTelemetry auto-instrumentation for PHP: one span per Laravel event and spans for every Redis command (phpredis and Predis).",
+    "keywords": ["opentelemetry", "otel", "tracing", "laravel", "redis", "phpredis", "predis", "instrumentation", "apm"],
+    "type": "library",
+    "license": "Apache-2.0",
+    "homepage": "https://github.com/koraitech/opentelemetry-php-extras",
+    "support": {
+        "issues": "https://github.com/koraitech/opentelemetry-php-extras/issues",
+        "source": "https://github.com/koraitech/opentelemetry-php-extras"
+    },
+    "require": {
+        "php": "^8.1",
+        "open-telemetry/api": "^1.0",
+        "composer-runtime-api": "^2.0"
+    },
+    "require-dev": {
+        "illuminate/events": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0",
+        "open-telemetry/sdk": "^1.0",
+        "phpunit/phpunit": "^10.5 || ^11.0",
+        "predis/predis": "^2.0 || ^3.0"
+    },
+    "suggest": {
+        "ext-opentelemetry": "Required unless the OpenTelemetry PHP distro is installed: provides the hook() function",
+        "ext-redis": "To trace phpredis commands",
+        "predis/predis": "To trace Predis commands"
+    },
+    "autoload": {
+        "psr-4": {
+            "Korai\\OpenTelemetry\\": "src/"
+        },
+        "files": [
+            "_register.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Korai\\OpenTelemetry\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true,
+            "tbachert/spi": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
