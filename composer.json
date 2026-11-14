@@ -17,12 +17,10 @@
     "require-dev": {
         "illuminate/events": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0",
         "illuminate/view": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0",
-        "nyholm/psr7": "^1.8",
         "open-telemetry/sdk": "^1.0",
         "open-telemetry/sem-conv": "^1.27",
         "phpunit/phpunit": "^10.5 || ^11.0",
-        "predis/predis": "^2.0 || ^3.0",
-        "symfony/http-client": "^7.4"
+        "predis/predis": "^2.0 || ^3.0"
     },
     "suggest": {
         "ext-opentelemetry": "Required unless the OpenTelemetry PHP distro is installed: provides the hook() function",
