@@ -6,6 +6,9 @@ namespace Korai\OpenTelemetry\Tests\Integration;
 
 use ArrayObject;
 use Illuminate\Events\Dispatcher;
+use Korai\OpenTelemetry\Config;
+use Korai\OpenTelemetry\Methods;
+use OpenTelemetry\API\Instrumentation\CachedInstrumentation;
 use OpenTelemetry\API\Globals;
 use OpenTelemetry\Context\ScopeInterface;
 use OpenTelemetry\SDK\Sdk;
@@ -18,6 +21,14 @@ use PHPUnit\Framework\TestCase;
  * With the `opentelemetry` extension loaded, Composer's autoloader has already registered the
  * hooks (_register.php). These tests only install an SDK and exercise real code.
  */
+final class PricingFixture
+{
+    public function quote(int $n): int
+    {
+        return $n * 2;
+    }
+}
+
 final class RealHooksTest extends TestCase
 {
     private ArrayObject $exported;
@@ -94,5 +105,16 @@ final class RealHooksTest extends TestCase
 
         // PHP 8.1 cannot hook methods of extensions, so phpredis is not traced there.
         $this->assertSame(PHP_VERSION_ID >= 80200 ? ['REDIS CONNECT', 'REDIS SET', 'REDIS GET', 'REDIS DEL'] : [], $names);
+    }
+
+    public function test_listed_methods_get_spans(): void
+    {
+        Methods::register(\OpenTelemetry\Instrumentation\hook(...), new CachedInstrumentation('test'),
+            new Config(['KORAI_OTEL_TRACE_METHODS' => PricingFixture::class . '::quote']));
+        $names = $this->inRequest(static function (): void {
+            (new PricingFixture())->quote(2);
+        });
+
+        $this->assertSame([PricingFixture::class . '::quote'], $names);
     }
 }

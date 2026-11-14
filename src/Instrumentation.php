@@ -41,6 +41,9 @@ final class Instrumentation
         if (!$config->isDisabled(Config::REDIS)) {
             Redis::register($hook, $instrumentation, $config);
         }
+        if (!$config->isDisabled(Config::METHODS)) {
+            Methods::register($hook, $instrumentation, $config);
+        }
         self::$registered = true;
 
         return true;

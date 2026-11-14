@@ -6,6 +6,7 @@ the official PHP instrumentation leaves blank:
 | What | Spans | Works with |
 |---|---|---|
 | **Laravel events** | One span per event dispatched through `Illuminate\Events\Dispatcher` that has listeners, named after the event: `App\Events\OrderPlaced`, `eloquent.saving: App\Models\Page`, `Illuminate\Auth\Events\Login`… Listeners run inside the span, so slow listeners and the queries they run are visible. Every event, as Datadog does, with `KORAI_OTEL_LARAVEL_EVENTS=all`. | Laravel 9 to 13 |
+| **Your own methods** | One span per call of the methods you list in `KORAI_OTEL_TRACE_METHODS` (`App\Services\Pricing::quote`), with no code change. For your own libraries, where time goes into PHP code no instrumentation knows. | Any PHP application |
 | **Redis commands** | One client span per command (`REDIS GET`, `REDIS HGETALL`, `REDIS PCONNECT`…), with server address, port and database. | phpredis (`ext-redis`, `Redis` and `RedisCluster`, PHP 8.2 or later) and Predis, in any PHP application |
 
 Nothing changes in your code: the package registers itself through Composer's autoloader.
@@ -48,10 +49,11 @@ All settings are environment variables and all are optional.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `OTEL_PHP_DISABLED_INSTRUMENTATIONS` | | Standard OpenTelemetry list. Add `korai-laravel-events` or `korai-redis` to turn a part off. |
+| `OTEL_PHP_DISABLED_INSTRUMENTATIONS` | | Standard OpenTelemetry list. Add `korai-laravel-events`, `korai-redis` or `korai-methods` to turn a part off. |
 | `KORAI_OTEL_LARAVEL_EVENTS` | `listeners` | Which events get a span. `listeners`: events with at least one listener of the application (listeners that OpenTelemetry registers itself do not count; cache hits and queries are already in the trace). `all`: every event, including each cache read and each model retrieved. A busy page can then send ten times more spans. |
 | `KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE` | | Comma-separated event names to skip. `*` matches anything: `Illuminate\Log\Events\MessageLogged,eloquent.*` |
 | `KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT` | `true` | Only create event spans inside an existing trace. Events fired while the framework boots would otherwise each start a trace of their own. |
+| `KORAI_OTEL_TRACE_METHODS` | | Comma-separated `Class::method` to trace: `App\Services\Pricing::quote,Vendor\Cms\Renderer::render`. Each call gets an `INTERNAL` span named `Class::method`. |
 | `KORAI_OTEL_REDIS_MIN_DURATION` | `0` | Milliseconds (`2`, `0.5ms`). Redis commands faster than this get no span; failed commands always do. Use it when a page sends hundreds of fast reads. |
 | `KORAI_OTEL_REDIS_KEYS` | `false` | Record the command and key in `db.query.text` (`GET session:abc`). Values are never recorded. |
 

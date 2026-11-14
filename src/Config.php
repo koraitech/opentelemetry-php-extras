@@ -14,6 +14,7 @@ final class Config
 {
     public const LARAVEL_EVENTS = 'korai-laravel-events';
     public const REDIS = 'korai-redis';
+    public const METHODS = 'korai-methods';
 
     /** @param array<string, string> $env */
     public function __construct(private readonly array $env)
@@ -30,6 +31,7 @@ final class Config
             'KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE',
             'KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT',
             'KORAI_OTEL_REDIS_KEYS',
+            'KORAI_OTEL_TRACE_METHODS',
             'KORAI_OTEL_REDIS_MIN_DURATION',
         ] as $name) {
             $value = getenv($name);
@@ -51,7 +53,7 @@ final class Config
 
     /**
      * Uses the standard OTEL_PHP_DISABLED_INSTRUMENTATIONS list, so one variable controls
-     * every instrumentation: `korai-laravel-events`, `korai-redis`, or `all`.
+     * every instrumentation: `korai-laravel-events`, `korai-redis`, `korai-methods`, or `all`.
      */
     public function isDisabled(string $instrumentation): bool
     {
@@ -107,6 +109,25 @@ final class Config
         }
 
         return is_numeric($value) && (float) $value > 0 ? (int) round((float) $value * 1_000_000) : 0;
+    }
+
+    /**
+     * Methods to trace, `Class::method` separated by commas (a leading backslash is ignored).
+     *
+     * @return list<array{string, string}>
+     */
+    public function tracedMethods(): array
+    {
+        $out = [];
+        foreach (self::list($this->env['KORAI_OTEL_TRACE_METHODS'] ?? '') as $item) {
+            $parts = explode('::', ltrim($item, '\\'), 2);
+            if (count($parts) === 2 && preg_match('/^[A-Za-z_][A-Za-z0-9_\\\\]*$/', $parts[0]) === 1
+                && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $parts[1]) === 1) {
+                $out[] = [$parts[0], $parts[1]];
+            }
+        }
+
+        return $out;
     }
 
     /** Record the Redis key (first argument) in `db.query.text`. Values are never recorded. */
