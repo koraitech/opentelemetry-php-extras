@@ -38,6 +38,9 @@ final class Instrumentation
         if (!$config->isDisabled(Config::LARAVEL_EVENTS)) {
             LaravelEvents::register($hook, $instrumentation, $config);
         }
+        if (!$config->isDisabled(Config::LARAVEL_VIEWS)) {
+            LaravelViews::register($hook, $instrumentation, $config);
+        }
         if (!$config->isDisabled(Config::REDIS)) {
             Redis::register($hook, $instrumentation, $config);
         }

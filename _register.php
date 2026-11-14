@@ -10,7 +10,7 @@ use Korai\OpenTelemetry\Instrumentation;
 // the OpenTelemetry PHP distro (with OTEL_PHP_SCOPED_DEPS_BRIDGE_ENABLED=true so the spans join its traces).
 (static function (): void {
     $config = Config::fromEnvironment();
-    if ($config->isDisabled(Config::LARAVEL_EVENTS) && $config->isDisabled(Config::REDIS) && $config->isDisabled(Config::METHODS)) {
+    if ($config->isDisabled(Config::LARAVEL_EVENTS) && $config->isDisabled(Config::LARAVEL_VIEWS) && $config->isDisabled(Config::REDIS) && $config->isDisabled(Config::METHODS)) {
         return;
     }
     if (!function_exists('OpenTelemetry\\Instrumentation\\hook')) {

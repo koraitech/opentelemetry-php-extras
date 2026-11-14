@@ -6,6 +6,11 @@ namespace Korai\OpenTelemetry\Tests\Integration;
 
 use ArrayObject;
 use Illuminate\Events\Dispatcher;
+use Illuminate\Filesystem\Filesystem;
+use Illuminate\View\Engines\EngineResolver;
+use Illuminate\View\Engines\PhpEngine;
+use Illuminate\View\Factory;
+use Illuminate\View\FileViewFinder;
 use Korai\OpenTelemetry\Config;
 use Korai\OpenTelemetry\Methods;
 use OpenTelemetry\API\Instrumentation\CachedInstrumentation;
@@ -116,5 +121,20 @@ final class RealHooksTest extends TestCase
         });
 
         $this->assertSame([PricingFixture::class . '::quote'], $names);
+    }
+
+    public function test_rendered_views_get_nested_spans(): void
+    {
+        $files = new Filesystem();
+        $resolver = new EngineResolver();
+        $resolver->register('php', static fn () => new PhpEngine($files));
+        $factory = new Factory($resolver, new FileViewFinder($files, [__DIR__ . '/views']), new Dispatcher());
+        $html = '';
+        $names = $this->inRequest(static function () use ($factory, &$html): void {
+            $html = $factory->make('home')->render();
+        });
+
+        $this->assertStringContainsString('hero', $html);
+        $this->assertSame(['cms.blocks.hero', 'home'], $names);
     }
 }

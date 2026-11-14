@@ -16,10 +16,13 @@
     },
     "require-dev": {
         "illuminate/events": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0",
+        "illuminate/view": "^9.0 || ^10.0 || ^11.0 || ^12.0 || ^13.0",
+        "nyholm/psr7": "^1.8",
         "open-telemetry/sdk": "^1.0",
         "open-telemetry/sem-conv": "^1.27",
         "phpunit/phpunit": "^10.5 || ^11.0",
-        "predis/predis": "^2.0 || ^3.0"
+        "predis/predis": "^2.0 || ^3.0",
+        "symfony/http-client": "^7.4"
     },
     "suggest": {
         "ext-opentelemetry": "Required unless the OpenTelemetry PHP distro is installed: provides the hook() function",
@@ -43,7 +46,7 @@
     "scripts": {
         "test:unit": [
             "Composer\\Config::disableProcessTimeout",
-            "@putenv OTEL_PHP_DISABLED_INSTRUMENTATIONS=korai-laravel-events,korai-redis,korai-methods",
+            "@putenv OTEL_PHP_DISABLED_INSTRUMENTATIONS=korai-laravel-events,korai-laravel-views,korai-redis,korai-methods",
             "phpunit --testsuite unit"
         ],
         "test:integration": [

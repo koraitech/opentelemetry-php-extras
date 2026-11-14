@@ -15,6 +15,7 @@ final class Config
     public const LARAVEL_EVENTS = 'korai-laravel-events';
     public const REDIS = 'korai-redis';
     public const METHODS = 'korai-methods';
+    public const LARAVEL_VIEWS = 'korai-laravel-views';
 
     /** @param array<string, string> $env */
     public function __construct(private readonly array $env)
@@ -30,6 +31,7 @@ final class Config
             'KORAI_OTEL_LARAVEL_EVENTS',
             'KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE',
             'KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT',
+            'KORAI_OTEL_LARAVEL_VIEWS_EXCLUDE',
             'KORAI_OTEL_REDIS_KEYS',
             'KORAI_OTEL_TRACE_METHODS',
             'KORAI_OTEL_REDIS_MIN_DURATION',
@@ -53,7 +55,7 @@ final class Config
 
     /**
      * Uses the standard OTEL_PHP_DISABLED_INSTRUMENTATIONS list, so one variable controls
-     * every instrumentation: `korai-laravel-events`, `korai-redis`, `korai-methods`, or `all`.
+     * every instrumentation: `korai-laravel-events`, `korai-laravel-views`, `korai-redis`, `korai-methods`, or `all`.
      */
     public function isDisabled(string $instrumentation): bool
     {
@@ -77,9 +79,15 @@ final class Config
     }
 
     /**
-     * Only create event spans inside an existing trace (default). Events fired while the
-     * framework boots, before any request span exists, would otherwise each start a new trace.
+     * View names to skip. Comma-separated, `*` matches anything, e.g. `components.icon,mail.*`.
+     *
+     * @return list<string>
      */
+    public function excludedViews(): array
+    {
+        return self::list($this->env['KORAI_OTEL_LARAVEL_VIEWS_EXCLUDE'] ?? '');
+    }
+
     /**
      * Which events get a span: `listeners` (default) only events that have a listener of the application's own,
      * so the span shows where listener time goes; `all` every dispatched event, as Datadog does (many more spans:
@@ -92,6 +100,10 @@ final class Config
         return $mode === 'all' ? 'all' : 'listeners';
     }
 
+    /**
+     * Only create event spans inside an existing trace (default). Events fired while the
+     * framework boots, before any request span exists, would otherwise each start a new trace.
+     */
     public function eventsRequireParent(): bool
     {
         return self::bool($this->env['KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT'] ?? null, true);

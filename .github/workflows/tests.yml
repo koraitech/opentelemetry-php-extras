@@ -43,7 +43,7 @@ jobs:
         env:
           LARAVEL: ${{ matrix.laravel }}
         run: |
-          composer require --dev --no-update "illuminate/events:${LARAVEL}"
+          composer require --dev --no-update "illuminate/events:${LARAVEL}" "illuminate/view:${LARAVEL}"
           composer update --no-interaction --no-progress --prefer-dist
       - name: Unit tests
         run: composer test:unit

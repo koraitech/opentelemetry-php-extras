@@ -93,7 +93,7 @@ def apply(new):
     constraint = " || ".join(f"^{m}.0" for m in majors)
     with open(COMPOSER) as f:
         composer = f.read()
-    composer = re.sub(r'("illuminate/events": )"[^"]*"', rf'\1"{constraint}"', composer)
+    composer = re.sub(r'("illuminate/(?:events|view)": )"[^"]*"', rf'\1"{constraint}"', composer)
     with open(COMPOSER, "w") as f:
         f.write(composer)
 
