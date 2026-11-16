@@ -39,7 +39,7 @@
         "psr-4": {
             "Korai\\OpenTelemetry\\Tests\\": "tests/"
         },
-        "classmap": ["tests/Support/FakeTelemetryWatcher.php"]
+        "classmap": ["tests/Support/FakeTelemetryWatcher.php", "tests/Fixtures/vendor/acme/watcher/WatcherListener.php"]
     },
     "scripts": {
         "test:unit": [

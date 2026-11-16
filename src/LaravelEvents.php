@@ -16,9 +16,9 @@ use Throwable;
  * The span lasts as long as the listeners run, so slow listeners show up in the trace, and spans
  * created by listeners (queries, HTTP calls...) are nested under the event that triggered them.
  *
- * By default only events with a listener of the application's own get a span: listeners that OpenTelemetry
- * itself registers (the Laravel instrumentation's cache and query watchers) do not count, since those events
- * already appear as span events or query spans. KORAI_OTEL_LARAVEL_EVENTS=all traces every event.
+ * By default only events with a listener defined in the application's own code get a span. Listeners from
+ * packages and the framework (anything under `vendor/`, e.g. Telescope, which listens to every event) and the
+ * ones OpenTelemetry registers do not count. KORAI_OTEL_LARAVEL_EVENTS=all traces every event.
  */
 final class LaravelEvents
 {
@@ -58,9 +58,15 @@ final class LaravelEvents
         $hook(self::DISPATCHER, 'dispatch', $pre, $post);
     }
 
+    /** @var array<string, array{string, bool}> event name => [listeners signature, answer] */
+    private static array $ownListenersCache = [];
+
     /**
-     * Whether the event has a listener that is not OpenTelemetry's own. Wildcard listeners count as the
-     * application's. Without a dispatcher to look at, the event is traced.
+     * Whether the event has a listener defined in the application's own code. Listeners that live under a
+     * `vendor/` directory (the framework itself, Telescope, Pulse, debug bars, error trackers...) and the ones
+     * OpenTelemetry registers do not count: tools like Telescope listen to every event, and counting them
+     * would trace every model retrieved and every cache read. Wildcard listeners follow the same rule.
+     * Without a dispatcher to look at, the event is traced.
      */
     public static function hasOwnListeners(mixed $dispatcher, string $name): bool
     {
@@ -68,26 +74,107 @@ final class LaravelEvents
             return true;
         }
         try {
-            if (method_exists($dispatcher, 'hasWildcardListeners') && $dispatcher->hasWildcardListeners($name)) {
-                return true;
-            }
             $raw = $dispatcher->getRawListeners();
             $names = [$name];
             if (class_exists($name, false)) {
                 $names = array_merge($names, array_values(class_implements($name) ?: []));
             }
+            $listeners = [];
             foreach ($names as $n) {
                 foreach ($raw[$n] ?? [] as $listener) {
-                    if (!self::isTelemetryListener($listener)) {
-                        return true;
+                    $listeners[] = $listener;
+                }
+            }
+            foreach (self::wildcards($dispatcher) as $pattern => $wildcardListeners) {
+                if (self::wildcardMatches((string) $pattern, $name)) {
+                    foreach ($wildcardListeners as $listener) {
+                        $listeners[] = $listener;
                     }
                 }
             }
+            // Busy pages dispatch the same events thousands of times: remember the answer until the listeners change.
+            $signature = (string) count($listeners) . ':' . spl_object_id($dispatcher);
+            $cached = self::$ownListenersCache[$name] ?? null;
+            if ($cached !== null && $cached[0] === $signature) {
+                return $cached[1];
+            }
+            $own = false;
+            foreach ($listeners as $listener) {
+                if (!self::isTelemetryListener($listener) && !self::isVendorListener($listener)) {
+                    $own = true;
+                    break;
+                }
+            }
+            if (count(self::$ownListenersCache) > 5000) {
+                self::$ownListenersCache = [];
+            }
+            self::$ownListenersCache[$name] = [$signature, $own];
+
+            return $own;
         } catch (Throwable) {
             return true;
         }
+    }
 
-        return false;
+    /** @return array<string, list<mixed>> the dispatcher's wildcard listeners (a protected property in Laravel) */
+    private static function wildcards(object $dispatcher): array
+    {
+        if (!method_exists($dispatcher, 'hasWildcardListeners')) {
+            return [];
+        }
+        try {
+            $property = new \ReflectionProperty($dispatcher, 'wildcards');
+            $value = $property->getValue($dispatcher);
+
+            return is_array($value) ? $value : [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** Laravel's Str::is() rules: `*` matches anything. */
+    public static function wildcardMatches(string $pattern, string $name): bool
+    {
+        if ($pattern === $name) {
+            return true;
+        }
+
+        return preg_match('#^' . str_replace('\\*', '.*', preg_quote($pattern, '#')) . '\z#u', $name) === 1;
+    }
+
+    /** A listener whose code lives under a `vendor/` directory: a package or the framework, not the application. */
+    public static function isVendorListener(mixed $listener): bool
+    {
+        $file = self::listenerFile($listener);
+
+        return $file !== null && preg_match('#[/\\\\]vendor[/\\\\]#', $file) === 1;
+    }
+
+    private static function listenerFile(mixed $listener): ?string
+    {
+        try {
+            if ($listener instanceof Closure) {
+                $file = (new \ReflectionFunction($listener))->getFileName();
+
+                return is_string($file) ? $file : null;
+            }
+            $class = null;
+            if (is_array($listener) && isset($listener[0])) {
+                $class = is_object($listener[0]) ? $listener[0]::class : (is_string($listener[0]) ? $listener[0] : null);
+            } elseif (is_string($listener)) {
+                $class = explode('@', $listener, 2)[0];
+            } elseif (is_object($listener)) {
+                $class = $listener::class;
+            }
+            if ($class === null || !class_exists($class)) {
+                return null;
+            }
+            $file = (new \ReflectionClass($class))->getFileName();
+
+            return is_string($file) ? $file : null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /** A listener registered by OpenTelemetry itself (the unscoped packages, or the distro's scoped copy). */

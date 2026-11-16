@@ -171,6 +171,40 @@ final class LaravelEventsTest extends TestCase
         $this->assertCount(2, $this->names());
     }
 
+    public function test_package_listeners_do_not_count_even_wildcards(): void
+    {
+        // Telescope-like tools listen to every event from vendor/: that must not trace every model and cache read.
+        $this->register([]);
+        $this->events->listen('*', \Acme\Watcher\WatcherListener::closure());
+        $this->events->listen('eloquent.*', [new \Acme\Watcher\WatcherListener(), 'handle']);
+        $this->events->listen('cache.hit', \Acme\Watcher\WatcherListener::class . '@handle');
+        $this->events->listen('app.event', fn () => null);
+        $this->startRoot();
+        $this->dispatch('eloquent.retrieved: App\\Models\\Country');
+        $this->dispatch('cache.hit');
+        $this->dispatch('app.event');
+        $this->dispatch('app.event');
+        $this->endRoot();
+
+        $this->assertSame(['app.event', 'app.event'], $this->names());
+        $this->assertTrue(LaravelEvents::isVendorListener(\Acme\Watcher\WatcherListener::closure()));
+        $this->assertFalse(LaravelEvents::isVendorListener(fn () => null));
+        $this->assertTrue(LaravelEvents::wildcardMatches('eloquent.*', 'eloquent.retrieved: X'));
+        $this->assertFalse(LaravelEvents::wildcardMatches('orders.*', 'eloquent.retrieved: X'));
+    }
+
+    public function test_a_listener_added_later_is_noticed(): void
+    {
+        $this->register([]);
+        $this->startRoot();
+        $this->dispatch('late.event');
+        $this->events->listen('late.event', fn () => null);
+        $this->dispatch('late.event');
+        $this->endRoot();
+
+        $this->assertSame(['late.event'], $this->names());
+    }
+
     public function test_telemetry_listeners_are_recognised(): void
     {
         $this->assertTrue(LaravelEvents::isTelemetryListener([new \OpenTelemetry\Tests\Fake\Watcher(), 'record']));

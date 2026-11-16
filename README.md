@@ -51,7 +51,7 @@ All settings are environment variables and all are optional.
 | Variable | Default | What it does |
 |---|---|---|
 | `OTEL_PHP_DISABLED_INSTRUMENTATIONS` | | Standard OpenTelemetry list. Add `korai-laravel-events`, `korai-laravel-views`, `korai-redis` or `korai-methods` to turn a part off. |
-| `KORAI_OTEL_LARAVEL_EVENTS` | `listeners` | Which events get a span. `listeners`: events with at least one listener of the application (listeners that OpenTelemetry registers itself do not count; cache hits and queries are already in the trace). `all`: every event, including each cache read and each model retrieved. A busy page can then send ten times more spans. |
+| `KORAI_OTEL_LARAVEL_EVENTS` | `listeners` | Which events get a span. `listeners`: events with at least one listener defined in the application's own code. Listeners of packages and of the framework (anything under `vendor/`, such as Telescope, which listens to every event) and those OpenTelemetry registers do not count; cache hits and queries are already in the trace. `all`: every event, including each cache read and each model retrieved. A busy page can then send ten times more spans. |
 | `KORAI_OTEL_LARAVEL_EVENTS_EXCLUDE` | | Comma-separated event names to skip. `*` matches anything: `Illuminate\Log\Events\MessageLogged,eloquent.*` |
 | `KORAI_OTEL_LARAVEL_EVENTS_REQUIRE_PARENT` | `true` | Only create event spans inside an existing trace. Events fired while the framework boots would otherwise each start a trace of their own. |
 | `KORAI_OTEL_LARAVEL_VIEWS_EXCLUDE` | | Comma-separated view names to skip, `*` matches anything: `components.icon,mail.*`. Useful when a small partial is rendered hundreds of times per page. |
