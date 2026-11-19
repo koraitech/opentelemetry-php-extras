@@ -3,7 +3,8 @@
 #      (Conventional Commits: "feat:" -> minor, "fix:"/other -> patch,
 #       "!" or "BREAKING CHANGE" -> major; while on 0.x a breaking change bumps the minor),
 #   2. tags it and publishes a GitHub release with the commit list,
-#   3. tells Packagist, which publishes the version on packagist.org.
+#   3. tells Packagist, which publishes the version on packagist.org,
+#   4. posts the notes to the team's Slack channel (secret SLACK_RELEASES_WEBHOOK).
 # Commits that only touch tests, CI or docs do not produce a release.
 name: Release
 
@@ -71,3 +72,15 @@ jobs:
           echo
           curl -sSf -X POST -H 'Content-Type: application/json' -d "$body" \
             "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_API_TOKEN}"
+
+      # The release notes to the team's Slack channel; a release that only adds a PHP or Laravel version is one line.
+      # No secret skips it; a failed post is a warning.
+      - name: Post the release notes to Slack
+        if: steps.version.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >-
+          python3 .github/scripts/slack_release.py "v${VERSION}" --name opentelemetry-php-extras
+          --headline "published on Packagist" --brief-if '^feat: support (PHP|Laravel) '
