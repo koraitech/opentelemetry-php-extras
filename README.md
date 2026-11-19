@@ -15,7 +15,7 @@ Nothing changes in your code: the package registers itself through Composer's au
 ## Requirements
 
 - PHP 8.1 or later. Tracing the phpredis extension needs PHP 8.2 or later: older versions cannot hook methods of PHP extensions. Predis and Laravel events work on 8.1.
-  <!-- tested -->Tested on PHP 8.1, 8.2, 8.3, 8.4 and 8.5, and Laravel 9 to 13.<!-- /tested -->
+  <!-- tested -->Tested on PHP 8.1, 8.2, 8.3, 8.4, 8.5 and 8.6, and Laravel 9 to 13.<!-- /tested -->
 - One of:
   - the [`opentelemetry` PECL extension](https://github.com/open-telemetry/opentelemetry-php-instrumentation) with the OpenTelemetry SDK, or
   - the [OpenTelemetry PHP distro](https://github.com/open-telemetry/opentelemetry-php-distro) (`opentelemetry-php-distro`).
