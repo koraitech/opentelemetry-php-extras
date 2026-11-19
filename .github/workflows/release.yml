@@ -76,6 +76,8 @@ jobs:
       # The release notes to the team's Slack channel; a release that only adds a PHP or Laravel version is one line.
       # No secret skips it; a failed post is a warning.
       - name: Post the release notes to Slack
+        continue-on-error: true
+        timeout-minutes: 2
         if: steps.version.outputs.version != ''
         env:
           GH_TOKEN: ${{ github.token }}
