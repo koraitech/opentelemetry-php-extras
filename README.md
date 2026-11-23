@@ -65,17 +65,18 @@ These are settings of the OpenTelemetry PHP distro and SDK, not of this package,
 difference together with it:
 
 ```bash
-# Fill time not covered by any span with spans sampled from the PHP stack (distro only)
-OTEL_PHP_INFERRED_SPANS_ENABLED=true
-OTEL_PHP_INFERRED_SPANS_SAMPLING_INTERVAL=20ms
-OTEL_PHP_INFERRED_SPANS_MIN_DURATION=10ms
-
 # Laravel records cache hits as span events; the default limit of 128 per span drops the rest
 OTEL_SPAN_EVENT_COUNT_LIMIT=1024
 
 # Each SQL query is traced by both the PDO and the Laravel instrumentation; keep one
 OTEL_PHP_DISABLED_INSTRUMENTATIONS=pdo
 ```
+
+Leave the distro's inferred spans (`OTEL_PHP_INFERRED_SPANS_ENABLED`) off for now: up to distro 0.7.2 about one in
+four inferred spans is exported with a parent that is never sent, and the instrumentation span around it can be lost.
+The fix is merged upstream
+([opentelemetry-php-distro#167](https://github.com/open-telemetry/opentelemetry-php-distro/pull/167)) but not
+released yet. This package covers the same gaps with named spans.
 
 If you use this package, do not call `Redis::enableEvents()` only to get Redis spans: with Laravel's own Redis
 instrumentation also active, each command would be traced twice.
